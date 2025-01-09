@@ -26,7 +26,7 @@ static INSERT_MESSAGE_QUERY: &str = r#"
 "#;
 
 static SELECT_MESSAGE_QUERY: &str =
-    "SELECT channel_id, message_id, author, content FROM messaging.messages;";
+    "SELECT channel_id, message_id, author, content FROM messaging.messages WHERE channel_id = ?";
 
 static CURRENT_KEYSPACE: &str = "messaging";
 
@@ -38,7 +38,7 @@ static CURRENT_KEYSPACE: &str = "messaging";
 
 // SerializeRow: Serializa a Struct para a query e faz o insert
 // DeserializeRow: Deserializa a select query para a minha struct
-#[derive(SerializeRow, DeserializeRow)]
+#[derive(SerializeRow, DeserializeRow, Clone)]
 struct Message {
     channel_id: i32,
     message_id: i32,
@@ -71,10 +71,17 @@ async fn main() -> anyhow::Result<()> {
         author: "rtoledo".to_string(),
         content: "salves!".to_string(),
     };
-    session.query_unpaged(INSERT_MESSAGE_QUERY, message).await?;
+    // Aqui eu uso o PreparedStatement pois o insert, na teoria, vai rodar varias vezes e só os
+    // valores serão alterados.
+    let prepare_insert = session.prepare(INSERT_MESSAGE_QUERY).await?;
+    session
+        .execute_unpaged(&prepare_insert, message.clone())
+        .await?;
 
+    // Aqui uso PreparedStatement também, já explicado a cima.
+    let prepared_select = session.prepare(SELECT_MESSAGE_QUERY).await?;
     let rows_result = session
-        .query_unpaged(SELECT_MESSAGE_QUERY, ())
+        .execute_unpaged(&prepared_select, (message.channel_id,))
         .await?
         .into_rows_result()?;
 
