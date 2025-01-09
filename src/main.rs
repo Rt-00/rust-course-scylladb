@@ -21,6 +21,15 @@ CREATE TABLE IF NOT EXISTS messaging.messages (
 );
 "#;
 
+static INSERT_MESSAGE_QUERY: &str = r#"
+    INSERT INTO messaging.messages (channel_id, message_id, author, content) VALUES (1, 1, 'rtoledo', 'hello');
+"#;
+
+static SELECT_MESSAGE_QUERY: &str =
+    "SELECT channel_id, message_id, author, content FROM messaging.messages;";
+
+static CURRENT_KEYSPACE: &str = "messaging";
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     println!("Hello, world!");
@@ -37,15 +46,13 @@ async fn main() -> anyhow::Result<()> {
     session.query_unpaged(CREATE_MESSAGES_TABLE, ()).await?;
 
     // Use "messaging" as default Keyspace.
-    session.use_keyspace("messaging", true).await?;
+    session.use_keyspace(CURRENT_KEYSPACE, true).await?;
 
     // Insert date in messages table
-    let insert_query = "INSERT INTO messages (channel_id, message_id, author, content) VALUES (1, 1, 'rtoledo', 'hello');";
-    session.query_unpaged(insert_query, ()).await?;
+    session.query_unpaged(INSERT_MESSAGE_QUERY, ()).await?;
 
-    let select_query = "SELECT channel_id, message_id, author, content FROM messages";
     let rows_result = session
-        .query_unpaged(select_query, ())
+        .query_unpaged(SELECT_MESSAGE_QUERY, ())
         .await?
         .into_rows_result()?;
 
