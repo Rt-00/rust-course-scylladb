@@ -1,11 +1,25 @@
-use scylla::{DeserializeRow, SessionBuilder};
-use std::net::IpAddr;
+use scylla::SessionBuilder;
 
-#[derive(DeserializeRow)]
-struct MyRow {
-    address: IpAddr,
-    username: String,
-}
+static CREATE_KEYSPACE: &str = r#"
+CREATE KEYSPACE IF NOT EXISTS messaging
+    WITH replication = {
+        'class': 'NetworkTopologyStrategy',
+        'replication_factor': 3
+    }
+    AND durable_writes = true
+    AND tablets = {'enabled': true};
+"#;
+
+static CREATE_MESSAGES_TABLE: &str = r#"
+CREATE TABLE IF NOT EXISTS messaging.messages (
+   channel_id int,
+   message_id int,
+   author text,
+   content text,
+
+   PRIMARY KEY (channel_id, message_id)
+);
+"#;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -17,18 +31,17 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Connection error");
 
-    // mesmo que eu não tenha parametro devo passar como segundo argumento uma tupla vazia
-    let result = session
-        .query_unpaged("SELECT address, username FROM system.clients", ())
-        .await?
-        .into_rows_result()?;
+    // Create "messaging" KeySpace.
+    session.query_unpaged(CREATE_KEYSPACE, ()).await?;
+    // Create "messages" Table.
+    session.query_unpaged(CREATE_MESSAGES_TABLE, ()).await?;
 
-    // Tipando a volta do resultado
-    for row in result.rows::<MyRow>()? {
-        let my_row = row?;
+    // Use "messaging" as default Keyspace.
+    session.use_keyspace("messaging", true).await?;
 
-        println!("IP: {} for {}!", my_row.address, my_row.username);
-    }
+    // Insert date in messages table
+    let insert_query = "INSERT INTO messages (channel_id, message_id, author, content) VALUES (1, 1, 'rtoledo', 'hello');";
+    session.query_unpaged(insert_query, ()).await?;
 
     Ok(())
 }
