@@ -43,5 +43,17 @@ async fn main() -> anyhow::Result<()> {
     let insert_query = "INSERT INTO messages (channel_id, message_id, author, content) VALUES (1, 1, 'rtoledo', 'hello');";
     session.query_unpaged(insert_query, ()).await?;
 
+    let select_query = "SELECT channel_id, message_id, author, content FROM messages";
+    let rows_result = session
+        .query_unpaged(select_query, ())
+        .await?
+        .into_rows_result()?;
+
+    for row in rows_result.rows::<(i32, i32, String, String)>()? {
+        let (_channel_id, _message_id, author, content): (i32, i32, String, String) = row?;
+
+        println!("{}: {}", author, content);
+    }
+
     Ok(())
 }
