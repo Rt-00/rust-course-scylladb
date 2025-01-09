@@ -67,21 +67,19 @@ async fn main() -> anyhow::Result<()> {
     // Insert date in messages table
     let message = Message {
         channel_id: 1,
-        message_id: 1,
+        message_id: 2,
         author: "rtoledo".to_string(),
         content: "salves!".to_string(),
     };
     // Aqui eu uso o PreparedStatement pois o insert, na teoria, vai rodar varias vezes e só os
     // valores serão alterados.
     let prepare_insert = session.prepare(INSERT_MESSAGE_QUERY).await?;
-    session
-        .execute_unpaged(&prepare_insert, message.clone())
-        .await?;
+    session.execute_unpaged(&prepare_insert, &message).await?;
 
     // Aqui uso PreparedStatement também, já explicado a cima.
     let prepared_select = session.prepare(SELECT_MESSAGE_QUERY).await?;
     let rows_result = session
-        .execute_unpaged(&prepared_select, (message.channel_id,))
+        .execute_unpaged(&prepared_select, (&message.channel_id,))
         .await?
         .into_rows_result()?;
 
@@ -90,6 +88,15 @@ async fn main() -> anyhow::Result<()> {
 
         println!("{}: {}", message.author, message.content);
     }
+
+    // Devo preparar aqui também, o intuito do scylla é ter milhões de operações simultâneas então
+    // podemos imaginar que iremos remover milhões registros.
+    let prepare_delete = session
+        .prepare("DELETE FROM messages where channel_id = ? AND message_id = ?")
+        .await?;
+    session
+        .execute_unpaged(&prepare_delete, (&message.channel_id, &message.message_id))
+        .await?;
 
     Ok(())
 }
